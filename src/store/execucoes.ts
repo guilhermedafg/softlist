@@ -1,9 +1,11 @@
 import { create } from 'zustand'
 import { execucoesApi } from '../api/execucoes-endpoints'
 import type { ExecucaoLocal, RespostaItemLocal } from '../api/execucoes-endpoints'
+import { storage } from '../db/storage'
+import type { FotoLocal } from '../hooks/usePhotoUpload'
 import type { StatusItem } from '../db/schema'
 
-// ─── Debounce helper ─────────────────────────────────────────────────────────
+// ─── Debounce ─────────────────────────────────────────────────────────────────
 
 type TimerMap = Map<string, ReturnType<typeof setTimeout>>
 const timersNota: TimerMap = new Map()
@@ -14,57 +16,88 @@ const debounceNota = (chave: string, fn: () => void, ms = 800) => {
   timersNota.set(chave, setTimeout(() => { fn(); timersNota.delete(chave) }, ms))
 }
 
-// ─── Store ────────────────────────────────────────────────────────────────────
+// ─── Tipos da store ───────────────────────────────────────────────────────────
 
 interface EstadoExecucoes {
-  /** Execução atualmente em andamento (carregada em memória) */
   execucaoAtiva: ExecucaoLocal | null
-  /** Histórico de execuções do checklist em foco */
+  /** Fotos em memória, segregadas por itemId — carregadas do IndexedDB */
+  fotosPorItem: Record<string, FotoLocal[]>
   historico: ExecucaoLocal[]
   estaCarregando: boolean
   erro: string | null
 }
 
 interface AcoesExecucoes {
-  /** Inicia nova execução ou retoma a existente em_andamento */
   iniciarOuRetomar: (checklistId: string, executorId: string) => Promise<ExecucaoLocal>
-  /** Marca/desmarca um item como concluído */
   marcarStatus: (itemId: string, novoStatus: StatusItem) => Promise<void>
-  /** Atualiza a nota de um item (com debounce de 800ms) */
   atualizarNota: (itemId: string, nota: string) => void
-  /** Finaliza a execução (100% ou força) */
+  /** Comprime + salva no IndexedDB + atualiza store */
+  adicionarFoto: (itemId: string, foto: FotoLocal) => Promise<void>
+  removerFoto: (itemId: string, fotoId: string) => Promise<void>
+  /** Carrega fotos do IndexedDB para a execução ativa */
+  carregarFotos: (execucaoId: string) => Promise<void>
   finalizar: () => Promise<void>
-  /** Cancela e descarta a execução ativa */
   cancelar: () => Promise<void>
-  /** Carrega histórico do checklist */
   buscarHistorico: (checklistId: string) => Promise<void>
-  /** Limpa a execução ativa da memória */
   limparAtiva: () => void
   limparErro: () => void
 }
 
 type StoreExecucoes = EstadoExecucoes & AcoesExecucoes
 
+// ─── Helper: enfileira sync ───────────────────────────────────────────────────
+
+async function enfileirarSync(execucaoId: string) {
+  try {
+    await storage.adicionarNaFila(execucaoId)
+  } catch {
+    // Silencioso — IndexedDB pode não estar disponível em todos os contextos
+  }
+}
+
+// ─── Store ────────────────────────────────────────────────────────────────────
+
 const useExecucoes = create<StoreExecucoes>((set, get) => ({
   execucaoAtiva: null,
+  fotosPorItem: {},
   historico: [],
   estaCarregando: false,
   erro: null,
 
   iniciarOuRetomar: async (checklistId, executorId) => {
-    set({ estaCarregando: true, erro: null })
+    set({ estaCarregando: true, erro: null, fotosPorItem: {} })
     try {
-      // Tenta retomar execução em andamento
       let execucao = await execucoesApi.buscarAtiva(checklistId, executorId)
       if (!execucao) {
         execucao = await execucoesApi.iniciar(checklistId, executorId)
       }
       set({ execucaoAtiva: execucao, estaCarregando: false })
+      // Carrega fotos do IndexedDB em background
+      get().carregarFotos(execucao.id)
       return execucao
     } catch (erro) {
       const mensagem = erro instanceof Error ? erro.message : 'Erro ao iniciar execução.'
       set({ erro: mensagem, estaCarregando: false })
       throw erro
+    }
+  },
+
+  carregarFotos: async (execucaoId) => {
+    try {
+      const todasFotos = await storage.buscarFotosPorExecucao(execucaoId)
+      const porItem: Record<string, FotoLocal[]> = {}
+      for (const fotoArm of todasFotos) {
+        if (!porItem[fotoArm.itemId]) porItem[fotoArm.itemId] = []
+        porItem[fotoArm.itemId].push({
+          id: fotoArm.id,
+          dataUrl: fotoArm.dataUrl,
+          tamanhoBytes: fotoArm.tamanhoBytes,
+          capturadaEm: fotoArm.capturadaEm,
+        })
+      }
+      set({ fotosPorItem: porItem })
+    } catch {
+      // IndexedDB indisponível — continua sem fotos
     }
   },
 
@@ -74,8 +107,9 @@ const useExecucoes = create<StoreExecucoes>((set, get) => ({
 
     const respostaAtual = execucaoAtiva.respostas[itemId]
     const observacaoAtual = respostaAtual?.observacao ?? ''
+    const fotosIdsAtual = respostaAtual?.fotosIds ?? []
 
-    // Otimistic update — reflete na UI imediatamente
+    // Optimistic update
     set((s) => ({
       execucaoAtiva: s.execucaoAtiva
         ? {
@@ -85,6 +119,7 @@ const useExecucoes = create<StoreExecucoes>((set, get) => ({
               [itemId]: {
                 status: novoStatus,
                 observacao: observacaoAtual,
+                fotosIds: fotosIdsAtual,
                 atualizadoEm: new Date().toISOString(),
               },
             },
@@ -98,17 +133,24 @@ const useExecucoes = create<StoreExecucoes>((set, get) => ({
         itemId,
         novoStatus,
         observacaoAtual,
+        fotosIdsAtual,
       )
       set({ execucaoAtiva: atualizada })
-    } catch (erro) {
-      // Reverte em caso de erro
+      enfileirarSync(execucaoAtiva.id)
+    } catch {
+      // Reverte
       set((s) => ({
         execucaoAtiva: s.execucaoAtiva
           ? {
               ...s.execucaoAtiva,
               respostas: {
                 ...s.execucaoAtiva.respostas,
-                [itemId]: respostaAtual ?? { status: 'pendente', observacao: '', atualizadoEm: '' },
+                [itemId]: respostaAtual ?? {
+                  status: 'pendente',
+                  observacao: '',
+                  fotosIds: [],
+                  atualizadoEm: '',
+                },
               },
             }
           : null,
@@ -123,8 +165,9 @@ const useExecucoes = create<StoreExecucoes>((set, get) => ({
 
     const respostaAtual = execucaoAtiva.respostas[itemId]
     const statusAtual: StatusItem = respostaAtual?.status ?? 'pendente'
+    const fotosIdsAtual: string[] = respostaAtual?.fotosIds ?? []
 
-    // Atualiza na UI imediatamente (sem delay)
+    // UI imediata
     set((s) => ({
       execucaoAtiva: s.execucaoAtiva
         ? {
@@ -134,6 +177,7 @@ const useExecucoes = create<StoreExecucoes>((set, get) => ({
               [itemId]: {
                 status: statusAtual,
                 observacao: nota,
+                fotosIds: fotosIdsAtual,
                 atualizadoEm: new Date().toISOString(),
               } satisfies RespostaItemLocal,
             },
@@ -141,15 +185,93 @@ const useExecucoes = create<StoreExecucoes>((set, get) => ({
         : null,
     }))
 
-    // Persiste após debounce
-    const chaveDebounce = `${execucaoAtiva.id}:${itemId}`
+    const chaveDebounce = `${execucaoAtiva.id}:${itemId}:nota`
     debounceNota(chaveDebounce, async () => {
       const { execucaoAtiva: atual } = get()
       if (!atual) return
-      await execucoesApi.salvarResposta(atual.id, itemId, statusAtual, nota).catch(() => {
-        // Silencioso — nota será salva na próxima ação
-      })
+      await execucoesApi
+        .salvarResposta(atual.id, itemId, statusAtual, nota, fotosIdsAtual)
+        .catch(() => undefined)
+      enfileirarSync(atual.id)
     })
+  },
+
+  adicionarFoto: async (itemId, foto) => {
+    const { execucaoAtiva } = get()
+    if (!execucaoAtiva) return
+
+    // Salva no IndexedDB
+    try {
+      await storage.salvarFoto({
+        id: foto.id,
+        execucaoId: execucaoAtiva.id,
+        itemId,
+        dataUrl: foto.dataUrl,
+        tamanhoBytes: foto.tamanhoBytes,
+        capturadaEm: foto.capturadaEm,
+      })
+    } catch {
+      set({ erro: 'Não foi possível salvar a foto localmente.' })
+      return
+    }
+
+    // Atualiza fotosPorItem na memória
+    set((s) => ({
+      fotosPorItem: {
+        ...s.fotosPorItem,
+        [itemId]: [...(s.fotosPorItem[itemId] ?? []), foto],
+      },
+    }))
+
+    // Atualiza fotosIds na execução (localStorage)
+    const respostaAtual = execucaoAtiva.respostas[itemId]
+    const fotosIdsAtualizados = [...(respostaAtual?.fotosIds ?? []), foto.id]
+    try {
+      const atualizada = await execucoesApi.atualizarFotosIds(
+        execucaoAtiva.id,
+        itemId,
+        fotosIdsAtualizados,
+      )
+      set({ execucaoAtiva: atualizada })
+      enfileirarSync(execucaoAtiva.id)
+    } catch {
+      set({ erro: 'Erro ao registrar foto. Tente novamente.' })
+    }
+  },
+
+  removerFoto: async (itemId, fotoId) => {
+    const { execucaoAtiva } = get()
+    if (!execucaoAtiva) return
+
+    // Remove do IndexedDB
+    try {
+      await storage.removerFoto(fotoId)
+    } catch {
+      // Continua mesmo se falhar no IndexedDB
+    }
+
+    // Remove da memória
+    set((s) => ({
+      fotosPorItem: {
+        ...s.fotosPorItem,
+        [itemId]: (s.fotosPorItem[itemId] ?? []).filter((f) => f.id !== fotoId),
+      },
+    }))
+
+    // Atualiza fotosIds na execução
+    const respostaAtual = execucaoAtiva.respostas[itemId]
+    const fotosIdsAtualizados = (respostaAtual?.fotosIds ?? []).filter((id) => id !== fotoId)
+    try {
+      const atualizada = await execucoesApi.atualizarFotosIds(
+        execucaoAtiva.id,
+        itemId,
+        fotosIdsAtualizados,
+      )
+      set({ execucaoAtiva: atualizada })
+      enfileirarSync(execucaoAtiva.id)
+    } catch {
+      set({ erro: 'Erro ao remover foto.' })
+    }
   },
 
   finalizar: async () => {
@@ -160,6 +282,7 @@ const useExecucoes = create<StoreExecucoes>((set, get) => ({
     try {
       const finalizada = await execucoesApi.finalizar(execucaoAtiva.id)
       set({ execucaoAtiva: finalizada, estaCarregando: false })
+      enfileirarSync(execucaoAtiva.id)
     } catch (erro) {
       const mensagem = erro instanceof Error ? erro.message : 'Erro ao finalizar.'
       set({ erro: mensagem, estaCarregando: false })
@@ -169,11 +292,10 @@ const useExecucoes = create<StoreExecucoes>((set, get) => ({
   cancelar: async () => {
     const { execucaoAtiva } = get()
     if (!execucaoAtiva) return
-
     try {
       await execucoesApi.cancelar(execucaoAtiva.id)
     } finally {
-      set({ execucaoAtiva: null })
+      set({ execucaoAtiva: null, fotosPorItem: {} })
     }
   },
 
@@ -186,7 +308,7 @@ const useExecucoes = create<StoreExecucoes>((set, get) => ({
     }
   },
 
-  limparAtiva: () => set({ execucaoAtiva: null }),
+  limparAtiva: () => set({ execucaoAtiva: null, fotosPorItem: {} }),
   limparErro: () => set({ erro: null }),
 }))
 

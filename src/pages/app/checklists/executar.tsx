@@ -5,7 +5,9 @@ import useChecklists from '../../../store/checklists'
 import useExecucoes from '../../../store/execucoes'
 import ExecutionItem from '../../../components/checklist/ExecutionItem'
 import Confetti from '../../../components/checklist/Confetti'
+import SyncIndicator from '../../../components/common/SyncIndicator'
 import type { StatusItem, ItemChecklist } from '../../../db/schema'
+import type { FotoLocal } from '../../../hooks/usePhotoUpload'
 
 // ─── Cores da progress bar ────────────────────────────────────────────────────
 
@@ -142,10 +144,13 @@ const PaginaExecutar: React.FC = () => {
   const { checklists, itens, buscarChecklists, buscarItens } = useChecklists()
   const {
     execucaoAtiva,
+    fotosPorItem,
     estaCarregando,
     iniciarOuRetomar,
     marcarStatus,
     atualizarNota,
+    adicionarFoto,
+    removerFoto,
     finalizar,
     limparAtiva,
   } = useExecucoes()
@@ -289,13 +294,16 @@ const PaginaExecutar: React.FC = () => {
               </h1>
             </div>
 
-            {/* Contador */}
-            <div className="flex-shrink-0 text-right">
-              <p className="text-lg font-bold text-black tabular-nums">
-                {totalConcluidos}
-                <span className="text-gray-300 font-normal">/{listaItens.length}</span>
-              </p>
-              <p className="text-xs text-gray-400 -mt-1">{porcentagem}%</p>
+            {/* Sync indicator + Contador */}
+            <div className="flex-shrink-0 flex items-center gap-3">
+              <SyncIndicator />
+              <div className="text-right">
+                <p className="text-lg font-bold text-black tabular-nums">
+                  {totalConcluidos}
+                  <span className="text-gray-300 font-normal">/{listaItens.length}</span>
+                </p>
+                <p className="text-xs text-gray-400 -mt-1">{porcentagem}%</p>
+              </div>
             </div>
           </div>
 
@@ -378,10 +386,13 @@ const PaginaExecutar: React.FC = () => {
                 key={itemAtual.id}
                 item={itemAtual}
                 resposta={execucaoAtiva.respostas[itemAtual.id]}
+                fotos={fotosPorItem[itemAtual.id] ?? []}
                 numero={itemAtualIdx + 1}
                 estaAtivo
                 aoToggle={() => handleToggle(itemAtual.id)}
                 aoAtualizarNota={(nota) => atualizarNota(itemAtual.id, nota)}
+                aoAdicionarFoto={(foto: FotoLocal) => adicionarFoto(itemAtual.id, foto)}
+                aoRemoverFoto={(fotoId: string) => removerFoto(itemAtual.id, fotoId)}
               />
 
               {/* Navegação */}
