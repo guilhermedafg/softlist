@@ -12,6 +12,7 @@ import PaginaListaChecklists from './pages/app/checklists/index'
 import PaginaCriarChecklist from './pages/app/checklists/criar'
 import PaginaDetalheChecklist from './pages/app/checklists/detalhe'
 import PaginaEditarChecklist from './pages/app/checklists/editar'
+import PaginaExecutar from './pages/app/checklists/executar'
 
 /** Spinner centralizado exibido durante verificação de autenticação */
 const CarregandoGlobal: React.FC = () => (
@@ -65,6 +66,10 @@ const App: React.FC = () => {
         <Route
           path="/checklists/:id/editar"
           element={<RotaProtegida><PaginaEditarChecklist /></RotaProtegida>}
+        />
+        <Route
+          path="/checklists/:id/executar"
+          element={<RotaProtegida><PaginaExecutar /></RotaProtegida>}
         />
 
         {/* ── Fallback ── */}
