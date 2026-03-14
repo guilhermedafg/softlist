@@ -87,7 +87,7 @@ const AppShell: React.FC<PropsAppShell> = ({
       </header>
 
       {/* Conteúdo */}
-      <main className={`${LARGURA[larguraMax]} mx-auto w-full px-4 py-6 flex-1`}>
+      <main className={`${LARGURA[larguraMax]} mx-auto w-full px-4 py-6 flex-1 page-enter`}>
         {children}
       </main>
     </div>

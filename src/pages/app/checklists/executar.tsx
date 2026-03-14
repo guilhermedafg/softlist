@@ -8,6 +8,7 @@ import Confetti from '../../../components/checklist/Confetti'
 import SyncIndicator from '../../../components/common/SyncIndicator'
 import type { StatusItem, ItemChecklist } from '../../../db/schema'
 import type { FotoLocal } from '../../../hooks/usePhotoUpload'
+import { useNotifications } from '../../../hooks/useNotifications'
 
 // ─── Cores da progress bar ────────────────────────────────────────────────────
 
@@ -155,8 +156,10 @@ const PaginaExecutar: React.FC = () => {
     limparAtiva,
   } = useExecucoes()
 
+  const { permissao, agendarParaItem } = useNotifications()
+
   const [itemAtualIdx, setItemAtualIdx] = useState(0)
-  const [listaAberta, setListaAberta] = useState(false) // mobile dropdown
+  const [listaAberta, setListaAberta] = useState(false)
   const [mostrarConfetti, setMostrarConfetti] = useState(false)
   const [foiConcluido, setFoiConcluido] = useState(false)
 
@@ -173,7 +176,22 @@ const PaginaExecutar: React.FC = () => {
       if (!itens[id]) await buscarItens(id)
       await iniciarOuRetomar(id, usuario.id)
     }
-    carregarEIniciar()
+    carregarEIniciar().then(() => {
+      // Agenda notificações para cada item (se permissão concedida)
+      if (permissao === 'granted' && checklist) {
+        const itensDaLista = itens[id] ?? []
+        itensDaLista.forEach((item) => {
+          agendarParaItem({
+            checklistId: id,
+            itemId: item.id,
+            tituloChecklist: checklist.titulo,
+            tituloItem: item.titulo,
+            horario: item.horario,
+            diasSemana: item.diasSemana,
+          }).catch(() => undefined)
+        })
+      }
+    })
 
     return () => { limparAtiva() }
   }, [id, usuario?.id]) // eslint-disable-line react-hooks/exhaustive-deps

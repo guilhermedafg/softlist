@@ -1,20 +1,21 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import useAuth from './store/auth'
+import NotificationBanner from './components/common/NotificationBanner'
 
-// Auth
+// Auth (carregamento imediato — pequenas)
 import PaginaLogin from './pages/auth/login'
 import PaginaRegistro from './pages/auth/register'
 
-// App
-import PaginaHome from './pages/app/index'
-import PaginaListaChecklists from './pages/app/checklists/index'
-import PaginaCriarChecklist from './pages/app/checklists/criar'
-import PaginaDetalheChecklist from './pages/app/checklists/detalhe'
-import PaginaEditarChecklist from './pages/app/checklists/editar'
-import PaginaExecutar from './pages/app/checklists/executar'
-import PaginaHistorico from './pages/app/checklists/historico'
-import PaginaGaleria from './pages/app/checklists/galeria'
+// App — carregamento lazy para code splitting automático
+const PaginaHome              = lazy(() => import('./pages/app/index'))
+const PaginaListaChecklists   = lazy(() => import('./pages/app/checklists/index'))
+const PaginaCriarChecklist    = lazy(() => import('./pages/app/checklists/criar'))
+const PaginaDetalheChecklist  = lazy(() => import('./pages/app/checklists/detalhe'))
+const PaginaEditarChecklist   = lazy(() => import('./pages/app/checklists/editar'))
+const PaginaExecutar          = lazy(() => import('./pages/app/checklists/executar'))
+const PaginaHistorico         = lazy(() => import('./pages/app/checklists/historico'))
+const PaginaGaleria           = lazy(() => import('./pages/app/checklists/galeria'))
 
 /** Spinner centralizado exibido durante verificação de autenticação */
 const CarregandoGlobal: React.FC = () => (
@@ -43,6 +44,8 @@ const App: React.FC = () => {
 
   return (
     <BrowserRouter>
+      <NotificationBanner />
+      <Suspense fallback={<CarregandoGlobal />}>
       <Routes>
         {/* ── Rotas públicas ── */}
         <Route path="/login" element={<PaginaLogin />} />
@@ -85,6 +88,7 @@ const App: React.FC = () => {
         {/* ── Fallback ── */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   )
 }

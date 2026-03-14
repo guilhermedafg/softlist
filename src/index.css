@@ -91,3 +91,73 @@ select:focus {
 .animate-check-pop    { animation: check-pop 0.25s ease-out forwards; }
 .animate-slide-up     { animation: slide-up 0.22s ease-out forwards; }
 .animate-item-pulse   { animation: item-ativo-pulse 2s ease-in-out infinite; }
+
+/* ─── Utilitários globais ────────────────────────────────────────────── */
+
+/* Oculta scrollbar mas mantém scroll funcional */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+/* Tap highlight desabilitado (melhor UX mobile) */
+button, a, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Touch targets mínimos 44x44px */
+.touch-target {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* Transição de fade para lazy images */
+img[loading="lazy"] {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+img[loading="lazy"].loaded,
+img.loaded {
+  opacity: 1;
+}
+
+/* Garantir que imagens não causem overflow */
+img {
+  max-width: 100%;
+}
+
+/* Foco acessível sem outline feio no mouse, mas visível no teclado */
+:focus-visible {
+  outline: 2px solid #000000;
+  outline-offset: 2px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Previne zoom em iOS em inputs */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* Animação fade-in de página */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.page-enter {
+  animation: fade-in 0.2s ease-out forwards;
+}
+
+/* Spinner border-3 (Tailwind não tem) */
+.border-3 {
+  border-width: 3px;
+}
