@@ -1,38 +1,6 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/(.*).json",
-      "destination": "/$1.json"
-    },
-    {
-      "source": "/(.*).js",
-      "destination": "/$1.js"
-    },
-    {
-      "source": "/(.*).css",
-      "destination": "/$1.css"
-    },
-    {
-      "source": "/(.*).svg",
-      "destination": "/$1.svg"
-    },
-    {
-      "source": "/(.*).png",
-      "destination": "/$1.png"
-    },
-    {
-      "source": "/(.*).jpg",
-      "destination": "/$1.jpg"
-    },
-    {
-      "source": "/(.+)",
-      "destination": "/index.html"
-    }
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/.*", "dest": "/index.html" }
   ]
 }
