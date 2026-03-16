@@ -1,0 +1,163 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: #F9F9F9;
+  color: #000000;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+}
+
+/* Scrollbar customizada para WebKit */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F5F5F5;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D0D0D0;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #666666;
+}
+
+/* ─── Animações de execução ─────────────────────────────────────────── */
+
+/* Confetti: partícula caindo */
+@keyframes confetti-cair {
+  0%   { transform: translateY(-20px) rotate(0deg) scale(1);   opacity: 1; }
+  70%  { opacity: 1; }
+  100% { transform: translateY(105vh) rotate(540deg) scale(0.6); opacity: 0; }
+}
+
+/* Confetti: balanço lateral */
+@keyframes confetti-balanco {
+  0%, 100% { margin-left: 0; }
+  25%       { margin-left: 18px; }
+  75%       { margin-left: -18px; }
+}
+
+/* Checkbox tick: escala de entrada */
+@keyframes check-pop {
+  0%   { transform: scale(0.6); }
+  55%  { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+/* Progress bar: entrada suave */
+@keyframes progress-slide {
+  from { width: 0%; }
+}
+
+/* Item concluído: fade verde */
+@keyframes item-concluido-enter {
+  from { background-color: #ffffff; }
+  to   { background-color: #f0fdf4; }
+}
+
+/* Pulse suave no item atual */
+@keyframes item-ativo-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0.06); }
+  50%       { box-shadow: 0 0 0 6px rgba(0,0,0,0.04); }
+}
+
+/* Slide-in da sidebar em mobile */
+@keyframes slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.animate-check-pop    { animation: check-pop 0.25s ease-out forwards; }
+.animate-slide-up     { animation: slide-up 0.22s ease-out forwards; }
+.animate-item-pulse   { animation: item-ativo-pulse 2s ease-in-out infinite; }
+
+/* ─── Utilitários globais ────────────────────────────────────────────── */
+
+/* Oculta scrollbar mas mantém scroll funcional */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+/* Tap highlight desabilitado (melhor UX mobile) */
+button, a, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Touch targets mínimos 44x44px */
+.touch-target {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* Transição de fade para lazy images */
+img[loading="lazy"] {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+img[loading="lazy"].loaded,
+img.loaded {
+  opacity: 1;
+}
+
+/* Garantir que imagens não causem overflow */
+img {
+  max-width: 100%;
+}
+
+/* Foco acessível sem outline feio no mouse, mas visível no teclado */
+:focus-visible {
+  outline: 2px solid #000000;
+  outline-offset: 2px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Previne zoom em iOS em inputs */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* Animação fade-in de página */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.page-enter {
+  animation: fade-in 0.2s ease-out forwards;
+}
+
+/* Spinner border-3 (Tailwind não tem) */
+.border-3 {
+  border-width: 3px;
+}
